@@ -8,7 +8,7 @@
 
 namespace app\commands;
 
-
+use Yii;
 use yii\console\Controller;
 
 class VerticaController extends Controller
@@ -56,14 +56,38 @@ class VerticaController extends Controller
      * Загрузить данные из указанного файла в базу
      * @param string $file_name
      * @return bool
+     * @throws \Exception
+     * @throws \yii\db\Exception
      */
     function loadData( $file_name ){
-        $result = false;
 
         $this->log( "Загрузка данных в БД из файла $file_name" );
 
 
+        /**
+         * @var \yii\db\Connection $vertica
+         */
+        $vertica = Yii::$app->vertica;
+        $transaction = $vertica->beginTransaction();
 
+        $sql = "COPY vertica FROM $file_name PARSER fcsvparser()";
+
+        try {
+            $vertica->createCommand( $sql )->execute();
+            $transaction->commit();
+            $result = true;
+        } catch( \Exception $e ) {
+
+            $transaction->rollBack();
+            $this->log( sprintf("Ошибка обращения к БД. Файл %s:%s, сообщение: %s, стек вызова: %s",
+                    $e->getFile(),
+                    $e->getLine(),
+                    $e->getMessage(),
+                    $e->getTraceAsString()
+                )
+            );
+            throw $e;
+        }
 
 
         if( $result ){
